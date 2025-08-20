@@ -1,0 +1,198 @@
+USER QUERY FLOW DIAGRAM
+=======================
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              1. FRONTEND (Vanilla JS)                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  User Types: "What is covered in lesson 5 of the MCP course?"                  │
+│                                    │                                            │
+│  sendMessage() function:           ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ • Capture input from chatInput field                                   │   │
+│  │ • Disable controls & show loading animation                            │   │
+│  │ • POST /api/query with JSON:                                           │   │
+│  │   {                                                                     │   │
+│  │     "query": "What is covered in lesson 5 of the MCP course?",         │   │
+│  │     "session_id": "session_1"                                           │   │
+│  │   }                                                                     │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           2. FASTAPI ENDPOINT (app.py)                         │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  @app.post("/api/query")                                                        │
+│                                    │                                            │
+│  query_documents() function:       ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ • Receive QueryRequest                                                  │   │
+│  │ • Create session if needed                                              │   │
+│  │ • Call: rag_system.query(request.query, session_id)                    │   │
+│  │ • Return QueryResponse with answer, sources, source_links              │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         3. RAG SYSTEM (rag_system.py)                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  Main Orchestrator - query() method:                                           │
+│                                    │                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ • Build AI prompt: "Answer this question about course materials: ..."  │   │
+│  │ • Get conversation history from SessionManager                          │   │
+│  │ • Call AI generator with tools                                          │   │
+│  │ • Extract sources from tool manager                                     │   │
+│  │ • Update conversation history                                           │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        4. AI GENERATOR (ai_generator.py)                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  Claude API Integration - Up to 2 rounds of tool calling:                      │
+│                                    │                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ System Prompt: "Use search tools for course-specific questions"        │   │
+│  │                                                                         │   │
+│  │ Round 1: Claude decides to use search tool                             │   │
+│  │ Tool Call: search_course_content(                                       │   │
+│  │   query="lesson 5",                                                     │   │
+│  │   course_name="MCP"                                                     │   │
+│  │ )                                                                       │   │
+│  │                                                                         │   │
+│  │ Round 2: Claude generates final response using search results          │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                       5. TOOL MANAGER (search_tools.py)                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  execute_tool("search_course_content", query="lesson 5", course_name="MCP")    │
+│                                    │                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ Available Tools:                                                        │   │
+│  │ • CourseSearchTool - Content search with filtering                     │   │
+│  │ • CourseOutlineTool - Course structure and lessons                     │   │
+│  │                                                                         │   │
+│  │ Executes CourseSearchTool.execute()                                     │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                     6. COURSE SEARCH TOOL (search_tools.py)                    │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  execute(query="lesson 5", course_name="MCP")                                  │
+│                                    │                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ • Call vector_store.search(query, course_name, lesson_number)          │   │
+│  │ • Format results with course/lesson context                            │   │
+│  │ • Track sources: ["MCP Course - Lesson 5"]                             │   │
+│  │ • Track source links: ["https://lesson5-link"]                         │   │
+│  │ • Return formatted search results                                       │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                       7. VECTOR STORE (vector_store.py)                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  search(query="lesson 5", course_name="MCP")                                   │
+│                                    │                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ Step 1: Course Name Resolution                                          │   │
+│  │   • Query course_catalog collection: "MCP"                             │   │
+│  │   • Semantic search returns: "MCP: Build Rich-Context AI Apps..."      │   │
+│  │                                                                         │   │
+│  │ Step 2: Build ChromaDB Filter                                          │   │
+│  │   • Create filter: {"course_title": "MCP: Build Rich-Context..."}      │   │
+│  │                                                                         │   │
+│  │ Step 3: Content Search                                                  │   │
+│  │   • Query course_content collection with filter                        │   │
+│  │   • Use SentenceTransformers embeddings                                │   │
+│  │   • Return matching text chunks with metadata                          │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          8. CHROMADB COLLECTIONS                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────────────────┐    ┌──────────────────────────────────────┐  │
+│  │     course_catalog           │    │         course_content              │  │
+│  │  ┌────────────────────────┐  │    │  ┌────────────────────────────────┐ │  │
+│  │  │ Course Metadata:       │  │    │  │ Text Chunks:                   │ │  │
+│  │  │ • Course titles        │  │    │  │ • Content: "In lesson 5..."    │ │  │
+│  │  │ • Instructor info      │  │    │  │ • Metadata:                    │ │  │
+│  │  │ • Lesson structure     │  │    │  │   - course_title               │ │  │
+│  │  │ • Course links         │  │    │  │   - lesson_number: 5           │ │  │
+│  │  │ • Lesson links (JSON)  │  │    │  │   - chunk_index                │ │  │
+│  │  └────────────────────────┘  │    │  └────────────────────────────────┘ │  │
+│  └──────────────────────────────┘    └──────────────────────────────────────┘  │
+│                                    │                                            │
+│  Returns: SearchResults with documents, metadata, distances                     │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▲ (Response flows back up the stack)
+                                       │
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           9. RESPONSE ASSEMBLY                                  │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ Search Results → AI Generator → Final Response                          │   │
+│  │                                                                         │   │
+│  │ • AI uses search results to generate answer                            │   │
+│  │ • Tool Manager extracts sources: ["MCP Course - Lesson 5"]             │   │
+│  │ • Tool Manager extracts links: ["https://lesson5-link"]                │   │
+│  │ • RAG System assembles: (response, sources, source_links)              │   │
+│  │ • FastAPI returns JSON response                                         │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        10. FRONTEND DISPLAY (script.js)                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  Response received:                                                             │
+│  {                                                                              │
+│    "answer": "Lesson 5 covers...",                                             │
+│    "sources": ["MCP Course - Lesson 5"],                                       │
+│    "source_links": ["https://lesson5-link"],                                   │
+│    "session_id": "session_1"                                                    │
+│  }                                                                              │
+│                                    │                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ • Remove loading animation                                              │   │
+│  │ • Render answer with marked.js (markdown → HTML)                       │   │
+│  │ • Create collapsible sources section                                   │   │
+│  │ • Add clickable links: <a href="https://lesson5-link">MCP - Lesson 5</a>│   │
+│  │ • Update session_id for future queries                                 │   │
+│  │ • Re-enable input controls                                             │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+KEY DATA TRANSFORMATIONS:
+========================
+Input:  "What is covered in lesson 5 of the MCP course?"
+   ↓
+Tool:   search_course_content(query="lesson 5", course_name="MCP")
+   ↓
+Resolve: "MCP" → "MCP: Build Rich-Context AI Apps with Anthropic"
+   ↓
+Filter:  {"course_title": "MCP: Build Rich-Context AI Apps with Anthropic"}
+   ↓
+Search:  ChromaDB semantic search with SentenceTransformers embeddings
+   ↓
+Results: Text chunks + metadata (course_title, lesson_number, chunk_index)
+   ↓
+Format:  "[MCP: Build Rich-Context AI Apps - Lesson 5]\nLesson content..."
+   ↓
+AI:     Claude generates comprehensive answer using search results
+   ↓
+Sources: ["MCP Course - Lesson 5"] with links: ["https://lesson5-link"]
+   ↓
+Display: Markdown-rendered response with clickable source attribution
