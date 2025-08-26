@@ -196,3 +196,40 @@ AI:     Claude generates comprehensive answer using search results
 Sources: ["MCP Course - Lesson 5"] with links: ["https://lesson5-link"]
    ↓
 Display: Markdown-rendered response with clickable source attribution
+
+DETAILED COMPONENT BREAKDOWN:
+============================
+
+Frontend (script.js):
+- Handles user input and displays responses
+- Manages session state and loading animations
+- Renders sources and markdown content
+
+FastAPI (app.py):
+- Provides REST API endpoints
+- Handles request/response serialization
+- Manages CORS and static file serving
+
+RAG System (rag_system.py):
+- Main orchestrator coordinating all components
+- Manages session creation and conversation history
+- Routes queries through AI generator with tools
+
+AI Generator (ai_generator.py):
+- Interfaces with Claude Sonnet 4 API
+- Handles tool calling workflow
+- Manages conversation context and system prompts
+
+Search Tools (search_tools.py):
+- Implements CourseSearchTool for semantic search
+- Formats search results with course/lesson context
+- Tracks sources for UI display
+
+Vector Store (vector_store.py):
+- ChromaDB wrapper with dual collection strategy
+- Provides course name resolution and content search
+- Uses sentence-transformers for embeddings
+
+Session Manager (session_manager.py):
+- Maintains conversation history per session
+- Provides context for follow-up questions
